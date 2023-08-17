@@ -1,0 +1,28 @@
+{
+  "name": "qubed3_logger",
+  "version": "1.0.0",
+  "description": "Providing simple and clear logging with a splash of colour.",
+  "main": "logger.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Qubed3/logger.git"
+  },
+  "keywords": [
+    "logger",
+    "console",
+    "colour",
+    "debug"
+  ],
+  "author": "M Sinclair",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Qubed3/logger/issues"
+  },
+  "homepage": "https://github.com/Qubed3/logger#readme",
+  "dependencies": {
+    "caller-path": "^3.0.1"
+  }
+}
