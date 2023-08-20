@@ -1,5 +1,4 @@
 const path = require('path');
-const callerPath = require('caller-path');
 
 const LCFATAL = "\x1b[41m";
 const LCERROR = "\x1b[31m";
@@ -8,14 +7,20 @@ const LCINFO = "\x1b[36m";
 const LCDEBUG = "\x1b[32m";
 const LCRESET = "\x1b[0m";
 
-const DebugLevel = {
+const PATH_OUTPUT = {
+    PATH: "110",
+    FILE: "001",
+    WHOLE: "111"
+}
+
+const DEBUG_LEVEL = {
     FATAL: 0,
     ERROR: 1,
     WARN: 2,
     INFO: 3,
     DEBUG: 4
 }
-DebugLevel.inverse = {
+DEBUG_LEVEL.inverse = {
     0: "FATAL",
     1: "ERROR",
     2: "WARN",
@@ -36,16 +41,21 @@ Stack Overflow link for colours: https://stackoverflow.com/questions/9781218/how
 
 /* Config options */
 //maxLoggingLevel sets the maximum logging level that should be output. All levels below the max will also be output 
-var maxLoggingLevel = DebugLevel.INFO;
+var maxLoggingLevel = DEBUG_LEVEL.INFO;
 
 //includeTimestamp indicates if date and time should be on each output.
-var includeTimestamp = true;
+var includeTimestamp = false;
+
+//groupLogsByFile indicates if a header should be printed displaying which file a logged message has come from, each time it changes.
+var groupLogsByFile = false;
+
+var pathOutput = PATH_OUTPUT.FILE;
 /*---------------------------------*/
 
 var prevCallerPath = "";
 var finalMessage = "";
-var currentCallerPath = callerPath();
 var includeTable = false;
+var currentCallerPath = "";
 
 function resetDefaults(){
     finalMessage = "";
@@ -60,12 +70,14 @@ function resetDefaults(){
  */
 function evaluateOptionsToDetermineAdvancing(options){
     //if the assert option exists and is a function...
-    if(options.assert && (typeof options.assert === "function")){
+    if(options.hasOwnProperty('assert') && (typeof options.assert === "function")){
         //run the function to see if it fails. If it fails exit the function. If it passes continue.
-        if(!assertFunction()) return false;
+        // console.log(`An Assertion: ${options.assert()}`);
+        if(!options.assert()) return false;
     }
     //if the assert option exists and is a boolean...
-    else if(options.assert && (typeof options.assert === "boolean")){
+    else if(options.hasOwnProperty('assert') && (typeof options.assert === "boolean")){
+        // console.log("A Boolean");
         if(options.assert == false) return false;
     }
 
@@ -82,9 +94,41 @@ function evaluateOptionsToDetermineAdvancing(options){
 function implementConfigOptions(options){
     
     //If the table option is set to true
-    if(options.table == true && options.tableObject){
-        includeTable = true;
+    if(options.hasOwnProperty('table')){
+        if(options.table == true && options.hasOwnProperty('tableObject')){
+            includeTable = true;
+        }
     }
+    
+
+}
+
+function addLoggingGroupHeader(){
+    //get the current path of the file calling the logger
+   // var currentCallerPath = callerPath({depth: 1});
+
+    // TODO: Find a module that can check callstack
+
+    //Next check if the current file calling the logger is the same as the previous one.
+    if(currentCallerPath == prevCallerPath) return;
+
+    //Output the directory based on the PATH_OUTPUT configuration
+    switch (pathOutput) {
+        case PATH_OUTPUT.FILE:
+            finalMessage+=`\n-----   ${path.basename(currentCallerPath)}   -----\n`;
+            break;
+        case PATH_OUTPUT.PATH:
+            finalMessage+=`\n-----   ${path.dirname(currentCallerPath)}   -----\n`;
+            break;
+        case PATH_OUTPUT.WHOLE:
+            finalMessage+=`\n-----   ${currentCallerPath}   -----\n`;
+            break;
+    
+        default:
+            break;
+    }
+    
+    prevCallerPath = currentCallerPath;
 
 }
 
@@ -96,6 +140,10 @@ function implementConfigOptions(options){
  * @returns {string} complete construction of message applying configuration options
  */
 function constructMessage(debugLevel, message, options){
+
+    if(groupLogsByFile){
+        addLoggingGroupHeader();
+    }
 
     if(options){
         //Check processing isn't haulted by conditions set in the options
@@ -134,21 +182,36 @@ function constructMessage(debugLevel, message, options){
 
 const logger = {
     /**
-     * Testing Testing 123
      * @param {string} message 
      * @param {Object} options 
+     * @param {boolean|function} options.assert pass a function (or resolve it in the parameter) that results to true or false. If true, the message will be logged.
+     * @param {boolean} options.table indicates whether the object in object.tableObject should be logged in a table below the logged message.
+     * @param {Object} options.tableObject the object to be logged if options.table is set to true.
+     * @param {Object} options.timestamp this is set to a boolean and can force the timestamp to be printed in that particular log when set to true even if the global timestamp setting is set to false.
+     * @param {Object} options.forceLog this is set to a boolean and can force the log to be printed regardless of the the global maxLoggingLevel set.
+     * @param {Object} optoins.returnString this is set to a boolean and will return the string rather than log it if set to true.
      * @returns 
      */
     FATAL(message ,options){
+        //Reset properties that may carry data from last logging.
+        resetDefaults();
 
         //Check this is below the maxLoggingLevel. If is above, exit function.
-        if(DebugLevel.FATAL > maxLoggingLevel) {
+        if(DEBUG_LEVEL.FATAL > maxLoggingLevel) {
             //If the debug level is greater than the maxLoggingLevel we check if the option forceLog is set to false
             //before returning. If set to true, maxLoggingLevel is dimissed and we continue through the function.
-            if(!options.forceLog) return;
+            if(options === undefined) return;
+
+            if(!options.hasOwnProperty('forceLog')) return;
+
+            if(options.forceLog == false) return;
         }
-        finalMessage = constructMessage(DebugLevel.FATAL,message,options);
+        finalMessage = constructMessage(DEBUG_LEVEL.FATAL,message,options);
         if(finalMessage == null) return;
+
+        if(options && options.hasOwnProperty('returnString') && options.returnString){
+            return finalMessage
+        }
 
         console.log(finalMessage);
         if(includeTable) console.table(options.tableObject);
@@ -157,15 +220,25 @@ const logger = {
     },
 
     ERROR(message ,options){
+        //Reset properties that may carry data from last logging.
+        resetDefaults();
 
         //Check this is below the maxLoggingLevel. If is above, exit function.
-        if(DebugLevel.ERROR > maxLoggingLevel) {
+        if(DEBUG_LEVEL.ERROR > maxLoggingLevel) {
             //If the debug level is greater than the maxLoggingLevel we check if the option forceLog is set to false
             //before returning. If set to true, maxLoggingLevel is dimissed and we continue through the function.
-            if(!options.forceLog) return;
+            if(options === undefined) return;
+
+            if(!options.hasOwnProperty('forceLog')) return;
+
+            if(options.forceLog == false) return;
         }
-        finalMessage = constructMessage(DebugLevel.ERROR,message,options);
+        finalMessage = constructMessage(DEBUG_LEVEL.ERROR,message,options);
         if(finalMessage == null) return;
+
+        if(options && options.hasOwnProperty('returnString') && options.returnString){
+            return finalMessage
+        }
 
         console.log(finalMessage);
         if(includeTable) console.table(options.tableObject);
@@ -174,15 +247,25 @@ const logger = {
     },
 
     WARN(message ,options){
+        //Reset properties that may carry data from last logging.
+        resetDefaults();
 
         //Check this is below the maxLoggingLevel. If is above, exit function.
-        if(DebugLevel.WARN > maxLoggingLevel) {
+        if(DEBUG_LEVEL.WARN > maxLoggingLevel) {
             //If the debug level is greater than the maxLoggingLevel we check if the option forceLog is set to false
             //before returning. If set to true, maxLoggingLevel is dimissed and we continue through the function.
-            if(!options.forceLog) return;
+            if(options === undefined) return;
+
+            if(!options.hasOwnProperty('forceLog')) return;
+
+            if(options.forceLog == false) return;
         }
-        finalMessage = constructMessage(DebugLevel.WARN,message,options);
+        finalMessage = constructMessage(DEBUG_LEVEL.WARN,message,options);
         if(finalMessage == null) return;
+
+        if(options && options.hasOwnProperty('returnString') && options.returnString){
+            return finalMessage
+        }
 
         console.log(finalMessage);
         if(includeTable) console.table(options.tableObject);
@@ -191,32 +274,53 @@ const logger = {
     },
 
     INFO(message ,options){
+        //Reset properties that may carry data from last logging.
+        resetDefaults();
 
         //Check this is below the maxLoggingLevel. If is above, exit function.
-        if(DebugLevel.INFO > maxLoggingLevel) {
+        if(DEBUG_LEVEL.INFO > maxLoggingLevel) {
             //If the debug level is greater than the maxLoggingLevel we check if the option forceLog is set to false
             //before returning. If set to true, maxLoggingLevel is dimissed and we continue through the function.
-            if(!options.forceLog) return;
+            if(options === undefined) return;
+
+            if(!options.hasOwnProperty('forceLog')) return;
+
+            if(options.forceLog == false) return;
         }
-        finalMessage = constructMessage(DebugLevel.INFO,message,options);
+        finalMessage = constructMessage(DEBUG_LEVEL.INFO,message,options);
         if(finalMessage == null) return;
+
+        if(options && options.hasOwnProperty('returnString') && options.returnString){
+            return finalMessage
+        }
 
         console.log(finalMessage);
         if(includeTable) console.table(options.tableObject);
 
-        resetDefaults();
     },
 
     DEBUG(message ,options){
+        //Reset properties that may carry data from last logging.
+        resetDefaults();
 
         //Check this is below the maxLoggingLevel. If is above, exit function.
-        if(DebugLevel.DEBUG > maxLoggingLevel) {
+        console.log(`DEBUG_LEVEL.DEBUG (${DEBUG_LEVEL.DEBUG}) > maxLoggingLevel (${maxLoggingLevel})`);
+        console.log(DEBUG_LEVEL.DEBUG > maxLoggingLevel)
+        if(DEBUG_LEVEL.DEBUG > maxLoggingLevel) {
             //If the debug level is greater than the maxLoggingLevel we check if the option forceLog is set to false
             //before returning. If set to true, maxLoggingLevel is dimissed and we continue through the function.
-            if(!options.forceLog) return;
+            if(options === undefined) return;
+
+            if(!options.hasOwnProperty('forceLog')) return;
+
+            if(options.forceLog == false) return;
         }
-        finalMessage = constructMessage(DebugLevel.DEBUG,message,options);
+        finalMessage = constructMessage(DEBUG_LEVEL.DEBUG,message,options);
         if(finalMessage == null) return;
+
+        if(options && options.hasOwnProperty('returnString') && options.returnString){
+            return finalMessage
+        }
 
         console.log(finalMessage);
         if(includeTable) console.table(options.tableObject);
@@ -231,7 +335,7 @@ const logger = {
     },
 
     getMaxLoggingLevel(returnEnum){
-        if(returnEnum) return DebugLevel.inverse[maxLoggingLevel]
+        if(returnEnum) return DEBUG_LEVEL.inverse[maxLoggingLevel]
         return maxLoggingLevel
     },
 
@@ -242,6 +346,15 @@ const logger = {
         }
 
         includeTimestamp = bool;
+    },
+
+    includeGroupByFile(bool, string){
+        if(typeof bool != "boolean") {
+            console.log(`${bool} is not a boolean. The method includeGroupByFile only accepts booleans`); 
+            return;
+        }
+
+        groupLogsByFile = bool;
     }
 
 }
@@ -261,4 +374,4 @@ function timestamp(){
 
 
 
-module.exports = logger, middlewareHTTPCallLogger;
+module.exports = { logger, DEBUG_LEVEL, middlewareHTTPCallLogger};
