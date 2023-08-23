@@ -304,8 +304,6 @@ const logger = {
         resetDefaults();
 
         //Check this is below the maxLoggingLevel. If is above, exit function.
-        console.log(`DEBUG_LEVEL.DEBUG (${DEBUG_LEVEL.DEBUG}) > maxLoggingLevel (${maxLoggingLevel})`);
-        console.log(DEBUG_LEVEL.DEBUG > maxLoggingLevel)
         if(DEBUG_LEVEL.DEBUG > maxLoggingLevel) {
             //If the debug level is greater than the maxLoggingLevel we check if the option forceLog is set to false
             //before returning. If set to true, maxLoggingLevel is dimissed and we continue through the function.
